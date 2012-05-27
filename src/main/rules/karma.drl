@@ -1,0 +1,26 @@
+package com.sample
+dialect "mvel"
+ 
+import com.sample.DroolsTest.Message;
+import com.sample.ProductBooking;
+import com.sample.PersonKarmaService;
+
+global PersonKarmaService personKarmaSvc;
+
+rule "Tiap booking berhasil, dapat 10 point untuk tiap qty (dibulatkan ke atas)"
+	when
+		$pb : ProductBooking( $personId : personId, $qty : qty >= 1, status == ProductBooking.Status.OPEN )
+		$points : Long() from (Long)Math.ceil(10.0 * $qty)
+	then
+		System.out.println("Selamat " + $personId + " dapat " + $points + " point");
+		personKarmaSvc.increase($personId, $points);
+end
+ 
+rule "Minus 20 point kali qty kalau cancel"
+ 	when
+ 		$action : CancelProductBooking($personId : personId, $productId : productId, $qty : qty, status == CancelProductBooking.Status.NEW )
+		$points : Long() from (Long)Math.ceil(20.0 * $qty)
+	then
+		System.out.println($personId + " nggak sportif nich, dikurangi " + $points + " point :-(");
+		personKarmaSvc.decrease($personId, $points);
+end

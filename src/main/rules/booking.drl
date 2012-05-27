@@ -1,0 +1,67 @@
+package com.sample
+dialect "mvel"
+ 
+import com.sample.DroolsTest.Message;
+import com.sample.BookProduct;
+import com.sample.ProductBooking;
+
+global StockService stockSvc;
+
+rule "Minta booking produk dengan qty 1, stock ada"
+	when
+		$action       : BookProduct( $personId : personId, $productId : productId, $qty : qty == 1.0, status == BookProduct.Status.NEW )
+		$availableQty : Double(this >= $qty) from stockSvc.getAvailableQtyByProductId($productId)
+	then
+		System.out.println($personId + " booking " + $productId + " sebanyak " + $qty);
+		stockSvc.decrease($productId, $qty);
+		var $booking = new ProductBooking($personId, $productId, $qty);
+		$booking.setStatus(ProductBooking.Status.OPEN)
+		insert($booking);
+		modify($action) {
+			setStatus(BookProduct.Status.BOOKED)
+		}
+end
+ 
+rule "Minta booking produk dengan qty 1, stock habis"
+	when
+		$action       : BookProduct( $personId : personId, $productId : productId, $qty : qty == 1.0, status == BookProduct.Status.NEW )
+		$availableQty : Double(this < $qty) from stockSvc.getAvailableQtyByProductId($productId)
+	then
+		System.out.println($personId + " booking " + $productId + " sebanyak " + $qty + ". Maaf stock habis!");
+		modify($action) {
+			setStatus(BookProduct.Status.OUT_OF_STOCK)
+		}
+end
+ 
+rule "Minta booking produk, tapi tidak ada ada stock"
+	when
+		$action : BookProduct( $personId : personId, $productId : productId, $qty : qty, status == BookProduct.Status.NEW )
+		Double(this == null) from stockSvc.getAvailableQtyByProductId($productId)
+	then
+		System.out.println($personId + " booking " + $productId + " sebanyak " + $qty + ". Maaf stock tidak terdaftar!");
+		modify($action) {
+			setStatus(BookProduct.Status.NO_STOCK_DATA)
+		}
+end
+ 
+rule "Minta booking produk dengan qty bukan 1"
+	when
+		$action : BookProduct( $personId : personId, $productId : productId, $qty : qty != 1.0, status == BookProduct.Status.NEW )
+	then
+		System.out.println($personId + " booking " + $productId + " sebanyak " + $qty + ". Tidak boleh! Qty harus 1");
+		modify($action) {
+			setStatus(BookProduct.Status.INVALID)
+		}
+end
+ 
+ rule "Cancel product booking"
+ 	when
+ 		$action : CancelProductBooking($personId : personId, $productId : productId, $qty : qty, status == CancelProductBooking.Status.NEW )
+	then
+		System.out.println($personId + " cancel " + $productId + " sebanyak " + $qty);
+		stockSvc.increase($productId, $qty);
+		modify($action) {
+			setStatus(CancelProductBooking.Status.CANCELED)
+		}
+ end
+ 
